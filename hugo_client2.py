@@ -1,5 +1,8 @@
+from random import random
 import socket
 import sys
+import random
+import time
 def main(type):
     ClientSocket = socket.socket()
     host = socket.gethostname()
@@ -15,6 +18,18 @@ def main(type):
             ClientSocket.send(str.encode(Input))
             Response = ClientSocket.recv(1024)
             print(f"Response: {Response.decode('utf-8')}")
+    if type == 2: # autosender
+        while True:
+            print("sending random buy order")
+            Input = f'B{round(400*random.random())}'
+            ClientSocket.send(str.encode(Input))
+            time.sleep(1.3)
+    if type == 3: # autosender 2
+        while True:
+            print("sending random sell order")
+            Input = f'S{round(400*random.random())}'
+            ClientSocket.send(str.encode(Input))
+            time.sleep(1.3)
     else: # reciever
         while True:
             try:
