@@ -42,6 +42,7 @@ class Server():
 
     def __init__(self) -> None:
         self.order_book = []
+        self.order_book_df = pd.DataFrame()
         print('init')
     
     def handle_order(self, order):
@@ -154,7 +155,7 @@ class Server():
         def update_output_bid(n_clicks, value):
             if not value == None:
                 print(f'Sending buy request at ${value}')
-                sio.emit('BID', [200,3])
+                sio.emit('BID', [value,3])
             return 'Input "{}"'.format(
                 value
             )
@@ -166,6 +167,7 @@ class Server():
         def update_output_ask(n_clicks, value):
             if not value == None:
                 print(f'Sending ask request at ${value}')
+                sio.emit('ASK', [value,3])
             return 'Input "{}"'.format(
                 value
             )
