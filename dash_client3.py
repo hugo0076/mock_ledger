@@ -25,18 +25,17 @@ def send_ping():
 @sio.event
 def connect():
     print('connected to server')
+    send_ping()
 
 @sio.on('*')
 def catch_all(event, data):
     print(f'caught {event} and {data}')
-    if event == 'update':
-        print(f'got update')
-        serv.handle_order(data)
     pass
 
 def start_server():
     sio.connect('http://localhost:5000')
     print('blah')
+    #await sio.wait()
 
 class Server():
 
@@ -46,7 +45,7 @@ class Server():
     
     def handle_order(self, order):
         self.order_book.append(order)
-
+        print(self.order_book)
         return 0
 
     def main(self, type = 0):
@@ -92,15 +91,9 @@ class Server():
 
         app.layout = html.Div(children=[
             html.Div([
-                dcc.Interval(id='refresh_ui', interval=500, n_intervals=0),
-                html.H1(id='labelUI', children='')
+                dcc.Interval(id='interval1', interval=1000, n_intervals=0),
+                html.H1(id='label1', children='')
             ]),
-            #html.Div([
-            #    dcc.Interval(id='send_order', interval=5500, n_intervals=0),
-            #    html.H1(id='labelSO', children='')
-            #]),
-
-            dcc.Store(id='order_book', data = []),
 
             html.H1(children='Mock Ledger'),
 
@@ -154,7 +147,7 @@ class Server():
         def update_output_bid(n_clicks, value):
             if not value == None:
                 print(f'Sending buy request at ${value}')
-                sio.emit('BID', [200,3])
+
             return 'Input "{}"'.format(
                 value
             )
@@ -170,30 +163,20 @@ class Server():
                 value
             )
 
-        @app.callback(Output('labelUI', 'children'),
-            [Input('refresh_ui', 'n_intervals')])
+        @app.callback(Output('label1', 'children'),
+            [Input('interval1', 'n_intervals')])
         def update_interval(n):
             print(f'query:{n}')
-            print(f'orderbook = {self.order_book}')
-            #sio.emit('BID', [200,3])
+            sio.emit('my 2nd message', {'foo': 'bar'})
             return ''
-
-        #@app.callback(Output('labelSO', 'children'),
-        #    [Input('send_order', 'n_intervals')])
-        #def update_interval(n):
-        #    print(f'query:{n}')
-        #    sio.emit('BID', [200,3])
-        #    return ''
-        app.run_server(port=8055, debug=True)
+        app.run_server(port=8555, debug=True)
 
 
 if __name__ == '__main__':
+    start_timer = None
     serv = Server()
     start_server()
     print('trying main')
     serv.main()
-    #while True:
-    #    sio.emit('my message', {'foo': 'bar'})
-    #    time.wait(1)
     #main(int(sys.argv[1]))
    
