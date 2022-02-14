@@ -16,7 +16,7 @@ def listener(client, address):
             if not data:
                 break
             else:
-                print(repr(data))
+                print(f'{repr(data)}')
                 with clients_lock:
                     for c in clients:
                         c.sendall(data)
