@@ -71,17 +71,22 @@ order_book = []
 trades = []
 
 def handle_order(event, sid, data):
-    order = Order(o_type=event, sid=sid, price=data[0], qty=data[1], o_time = time.time())
+    order = Order(o_type=event, sid=sid, price=int(data[0]), qty=int(data[1]), o_time = time.time())
     print('handling order')
     
     # check if this order is in cross 
     resultant_trades = []
     if event == 'BID':
         if asks:
+            print(f'init matching bid qty {order.qty}')
             asks.sort(key = lambda x: (x.price, x.o_time))
             best_ask = asks[0]
+            print(f'asks:{asks}')
+            print(best_ask.price)
+            print(order.price)
+            print(type(order.price))
             while (order.price >= best_ask.price) and (order.qty > 0):
-                print(f'matching qty {order.qty}')
+                print(f'matching bid qty {order.qty}')
                 #trade occurs
                 if order.qty >= best_ask.qty:
                     # reduce agg order size
@@ -100,11 +105,15 @@ def handle_order(event, sid, data):
                     break
     elif event == 'ASK':
         if bids:
-            bids.sort(key = lambda x: (x.price, x.o_time))
+            print(f'init matching ask qty {order.qty}')
+            bids.sort(key = lambda x: (-x.price, x.o_time))
+            print(f'bids:{bids}')
             best_bid = bids[0]
             print(best_bid.price)
+            print(order.price)
+            print(type(order.price))
             while (order.price <= best_bid.price) and (order.qty > 0):
-                print(f'matching qty {order.qty}')
+                print(f'matching ask qty {order.qty}')
                 #trade occurs
                 if order.qty >= best_bid.qty:
                     # reduce agg order size

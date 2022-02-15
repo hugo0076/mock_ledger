@@ -1,3 +1,4 @@
+from traceback import print_tb
 from dash import Dash, dash_table
 from dash import dcc
 from dash import html
@@ -51,7 +52,9 @@ class Server():
         self.order_book = []
         self.order_book_df = pd.DataFrame()
         self.bids = []
+        self.bid_px_q = []
         self.asks = []
+        self.ask_px_q = []
         # TODO: add code to get current state of book
         print('init')
     
@@ -103,20 +106,7 @@ class Server():
         )
 
         data = pd.DataFrame(data_dict)
-
-        #x0 = np.random.randn(500)
-        ## Add 1 to shift the mean of the Gaussian distribution
-        #x1 = np.random.randn(500) + 1
-        #
-        #fig = go.Figure()
-        #fig.add_trace(go.Histogram(x=x0))
-        #fig.add_trace(go.Histogram(x=x1))
-        #
-        ## Overlay both histograms
-        #fig.update_layout(barmode='overlay')
-        ## Reduce opacity to see both histograms
-        #fig.update_traces(opacity=0.75)
-        #fig.show()
+        print(data.to_dict('records'))
 
         app.layout = html.Div(children=[
             html.Div([
@@ -140,7 +130,7 @@ class Server():
 
             html.Div([
                 dash_table.DataTable(
-                    id='table',
+                    id="table",
                     style_data={
                         'width': '10px',
                         'maxWidth': '10px',
@@ -163,24 +153,57 @@ class Server():
             Output("graph", "figure"),
             Input('refresh_ui', 'n_intervals'))
         def display_color(mean = 0):
-            bid_px_q = []
+            self.bid_px_q = []
             for order in self.bids:
-                bid_px_q += [order.price] * int(order.qty)
-            bid_px_q.sort(key = lambda x: float(x))
-            ask_px_q = []
+                self.bid_px_q += [order.price] * int(order.qty)
+            self.bid_px_q.sort(key = lambda x: float(x))
+            self.ask_px_q = []
             for order in self.asks:
-                ask_px_q += [order.price] * int(order.qty)
-            ask_px_q.sort(key = lambda x: float(x))
+                self.ask_px_q += [order.price] * int(order.qty)
+            self.ask_px_q.sort(key = lambda x: float(x))
             #data_bid = np.random.normal(200, 15, size=500)
             #data_ask = np.random.normal(100, 15, size=500)
             fig = go.Figure()
-            #bins = dict(start=0, end=475, size=15)
-            fig.add_trace(go.Histogram(x=bid_px_q))
-            fig.add_trace(go.Histogram(x=ask_px_q))
-
+            tick_size = 1
+            if self.bids and self.asks:
+                bins = go.histogram.XBins(end=self.ask_px_q[-1], size=tick_size, start=self.bid_px_q[0])#dict(start=0, end=475, size=15)
+                fig.add_trace(go.Histogram(x=self.bid_px_q, xbins = bins))
+                fig.add_trace(go.Histogram(x=self.ask_px_q, xbins = bins))
+            else:
+                fig.add_trace(go.Histogram(x=self.bid_px_q))
+                fig.add_trace(go.Histogram(x=self.ask_px_q))
             # Overlay both histograms
             fig.update_layout(barmode='overlay')
             return fig
+        
+        @app.callback(
+            Output("table", "data"),
+            Input('refresh_ui', 'n_intervals'))
+        def display_table(mean = 0):
+            print('trying to disp table')
+            data_range = range(20, 26, 1)
+            bids_dd = defaultdict(lambda x: 0)
+            for row in data_range:
+                bids_dd[row] = 0
+            for order in self.bids:
+                bids_dd[order.price] += order.qty
+            asks_dd = defaultdict(lambda x: 0)
+            for row in data_range:
+                asks_dd[row] = 0
+            for order in self.asks:
+                asks_dd[order.price] += order.qty
+            data_dict = OrderedDict(
+                [
+                    ("Bids Qty", list(bids_dd.values())[::-1]), 
+                    ("Price", list(data_range)[::-1]),
+                    ("Asks Qty", list(asks_dd.values())[::-1])
+                ]
+            )
+            data = pd.DataFrame(data_dict)
+            data=data.to_dict('records')
+            print(data)
+            #columns=[{"name": i, "id": i} for i in data.columns]
+            return data
 
         @app.callback(
             Output('container-button-basic-bid', 'children'),
