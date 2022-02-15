@@ -79,27 +79,20 @@ def handle_order(event, sid, data):
     if event == 'BID':
         if asks:
             asks.sort(key = lambda x: (x.price, x.o_time))
-            best_ask = asks.pop(0)
+            best_ask = asks[0]
             while (order.price >= best_ask.price) and (order.qty > 0):
                 print(f'matching qty {order.qty}')
                 #trade occurs
-                if order.qty > best_ask.qty:
+                if order.qty >= best_ask.qty:
                     # reduce agg order size
                     order.qty = order.qty - best_ask.qty 
                     trade = Trade(bid = order.id, ask = best_ask.id, price = best_ask.price, qty = best_ask.qty, resting_order = best_ask.id, resting_order_type = 'ASK', o_time = order.o_time)
                     resultant_trades.append(trade)
-                    best_ask = asks.pop(0)
+                    asks.pop(0)
+                    best_ask = asks[0]
                 elif order.qty < best_ask.qty:
                     # reduce resting order size
-                    best_ask.qty = best_ask.qty - order.qty
-                    order.qty = 0
-                    asks.append(best_ask)
-                    #trade = {'bid':sid, 'ask': best_ask.sid, 'qty': order.qty, 'price': best_ask.price, 'time': order.time, 'resting_order': best_ask}
-                    trade = Trade(bid = order.id, ask = best_ask.id, price = best_ask.price, qty = order.qty, resting_order = best_ask.id, resting_order_type = 'ASK', o_time = order.o_time)
-                    resultant_trades.append(trade)
-                    break
-                elif order.qty == best_ask.qty:
-                    # remove both
+                    asks[0].qty = asks[0].qty - order.qty
                     order.qty = 0
                     #trade = {'bid':sid, 'ask': best_ask.sid, 'qty': order.qty, 'price': best_ask.price, 'time': order.time, 'resting_order': best_ask}
                     trade = Trade(bid = order.id, ask = best_ask.id, price = best_ask.price, qty = order.qty, resting_order = best_ask.id, resting_order_type = 'ASK', o_time = order.o_time)
@@ -108,28 +101,22 @@ def handle_order(event, sid, data):
     elif event == 'ASK':
         if bids:
             bids.sort(key = lambda x: (x.price, x.o_time))
-            best_bid = bids.pop(0)
+            best_bid = bids[0]
+            print(best_bid.price)
             while (order.price <= best_bid.price) and (order.qty > 0):
                 print(f'matching qty {order.qty}')
                 #trade occurs
-                if order.qty > best_bid.qty:
+                if order.qty >= best_bid.qty:
                     # reduce agg order size
                     order.qty = order.qty - best_bid.qty 
                     #trade = {'bid':best_bid.sid, 'ask': sid, 'qty': best_bid.qty, 'price': best_bid.price, 'time': order.time, 'resting_order': best_bid}
                     trade = Trade(bid = best_bid.id, ask = order.id, price = best_bid.price, qty = best_bid.qty, resting_order = best_bid.id, resting_order_type = 'BID', o_time = order.o_time)
                     resultant_trades.append(trade)
-                    best_bid = bids.pop(0)
+                    bids.pop(0)
+                    best_bid = bids[0]
                 elif order.qty < best_bid.qty:
                     # reduce resting order size
-                    best_bid.qty = best_bid.qty - order.qty
-                    order.qty = 0
-                    bids.append(best_bid)
-                    #trade = {'bid':best_bid.sid, 'ask': sid, 'qty': order.qty, 'price': best_bid.price, 'time': order.time, 'resting_order': best_bid}
-                    trade = Trade(bid = best_bid.id, ask = order.id, price = best_bid.price, qty = order.qty, resting_order = best_bid.id, resting_order_type = 'BID', o_time = order.o_time)
-                    resultant_trades.append(trade)
-                    break
-                elif order.qty == best_bid.qty:
-                    # remove both
+                    bids[0].qty = bids[0].qty - order.qty
                     order.qty = 0
                     #trade = {'bid':best_bid.sid, 'ask': sid, 'qty': order.qty, 'price': best_bid.price, 'time': order.time, 'resting_order': best_bid}
                     trade = Trade(bid = best_bid.id, ask = order.id, price = best_bid.price, qty = order.qty, resting_order = best_bid.id, resting_order_type = 'BID', o_time = order.o_time)
@@ -147,6 +134,9 @@ def handle_order(event, sid, data):
     for trade in resultant_trades:
         print(f'informing everyone of trade: {trade}')
         sio.emit('trade', json.dumps(trade.__dict__))
+        trades.append(trade)
+    print(trades)
+    
     return 0
 
 if __name__ == '__main__':
