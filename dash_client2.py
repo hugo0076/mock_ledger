@@ -12,14 +12,14 @@ import plotly.graph_objects as go
 import numpy as np
 from random import random
 
-from data_types import Order
-
 import asyncio
 import time
 import socketio
 from collections import defaultdict
 import json
 from types import SimpleNamespace
+import jsonpickle
+from typedefs_ob import Order, Trade, Trader, OrderBook
 
 # loop = asyncio.get_event_loop()
 sio = socketio.Client()
@@ -33,47 +33,58 @@ def connect():
 
 @sio.on('*')
 def catch_all(event, raw_data):
-    data = json.loads(raw_data, object_hook=lambda d: SimpleNamespace(**d))
+    data = jsonpickle.decode(raw_data)
     if event == 'insert':
         print(f'got insrt {data}')
-        serv.handle_order(data)
+        cli.handle_order(data)
     elif event == 'trade':
         print(f'got trade: {data}')
-        serv.handle_trade(data)
+        cli.handle_trade(data)
+    elif event == 'order_book':
+        print(f'got ob: {data}')
+        cli.update_order_book(data)
     pass
 
 def start_server():
     sio.connect('http://localhost:5000')
-    print('blah')
 
-class Server():
+class DashClient():
 
     def __init__(self) -> None:
-        self.order_book = []
+        self.orders = []
         self.order_book_df = pd.DataFrame()
         self.bids = []
         self.bid_px_q = []
         self.asks = []
         self.ask_px_q = []
         # TODO: add code to get current state of book
+        sio.emit('get_order_book', [])
         print('init')
     
     def handle_order(self, order):
         # if not add to book 
-        self.order_book.append(order)
+        self.orders.append(order)
         if order.o_type == 'BID':
             self.bids.append(order)
         elif order.o_type == 'ASK':
             self.asks.append(order)
         return 0
     
+    def update_order_book(self, order_book):
+        # if not add to book 
+
+        self.bids = order_book.bids
+        self.asks = order_book.asks
+        self.orders = order_book.orders
+        return 0
+    
     def handle_trade(self, trade):
         # if not add to book 
-        if trade.resting_order not in [t.id for t in self.order_book]:
+        if trade.resting_order not in [t.id for t in self.orders]:
             print('Oops, we dont have a copy of the resting order')
             raise IndexError
-        print(f'ob: {len(self.order_book)} bid: {len(self.bids)} ask: {len(self.asks)}')
-        self.order_book = [order for order in self.order_book if order.id != trade.resting_order]
+        print(f'ob: {len(self.orders)} bid: {len(self.bids)} ask: {len(self.asks)}')
+        self.orders = [order for order in self.orders if order.id != trade.resting_order]
         if trade.resting_order_type == 'BID':
             self.bids = [order for order in self.bids if order.id != trade.resting_order]
         elif trade.resting_order_type == 'ASK':
@@ -83,7 +94,7 @@ class Server():
     def main(self, type = 0):
         print('launching dash')
         es = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
-        app = Dash(__name__, external_stylesheets=es)
+        dash_app = Dash(__name__, external_stylesheets=es)
         bid_quote_input = [
             html.Div(dcc.Input(id='input-on-submit-bid', type='text')),
             html.Button('Submit Bid', id='bid-quote-val'),
@@ -108,23 +119,17 @@ class Server():
         data = pd.DataFrame(data_dict)
         print(data.to_dict('records'))
 
-        app.layout = html.Div(children=[
+        dash_app.layout = html.Div(children=[
             html.Div([
                 dcc.Interval(id='refresh_ui', interval=2000, n_intervals=0),
                 html.H1(id='labelUI', children='')
             ]),
-            #html.Div([
-            #    dcc.Interval(id='send_order', interval=5500, n_intervals=0),
-            #    html.H1(id='labelSO', children='')
-            #]),
+            html.Div([
+                dcc.Interval(id='refresh_ob', interval=15000, n_intervals=0),
+                html.H1(id='labelOB', children='')
+            ]),
 
-            dcc.Store(id='order_book', data = []),
-
-            html.H1(children='Mock Ledger'),
-
-            html.Div(children='''
-                Dash: A web application framework for your data.
-            '''),
+            html.H1(children='Mock Ledger',style={'textAlign': 'center'}),
 
             dcc.Graph(id="graph"),
 
@@ -149,7 +154,7 @@ class Server():
             )
         ])
 
-        @app.callback(
+        @dash_app.callback(
             Output("graph", "figure"),
             Input('refresh_ui', 'n_intervals'))
         def display_color(mean = 0):
@@ -176,7 +181,7 @@ class Server():
             fig.update_layout(barmode='overlay')
             return fig
         
-        @app.callback(
+        @dash_app.callback(
             Output("table", "data"),
             Input('refresh_ui', 'n_intervals'))
         def display_table(mean = 0):
@@ -205,7 +210,7 @@ class Server():
             #columns=[{"name": i, "id": i} for i in data.columns]
             return data
 
-        @app.callback(
+        @dash_app.callback(
             Output('container-button-basic-bid', 'children'),
             Input('bid-quote-val', 'n_clicks'),
             State('input-on-submit-bid', 'value')
@@ -217,7 +222,7 @@ class Server():
             return 'Input "{}"'.format(
                 value
             )
-        @app.callback(
+        @dash_app.callback(
             Output('container-button-basic-ask', 'children'),
             Input('ask-quote-val', 'n_clicks'),
             State('input-on-submit-ask', 'value')
@@ -230,28 +235,29 @@ class Server():
                 value
             )
 
-        @app.callback(Output('labelUI', 'children'),
+        @dash_app.callback(Output('labelUI', 'children'),
             [Input('refresh_ui', 'n_intervals')])
         def update_interval(n):
             print(f'query:{n}')
             #sio.emit('BID', [200,3])
             return ''
 
-        #@app.callback(Output('labelSO', 'children'),
-        #    [Input('send_order', 'n_intervals')])
-        #def update_interval(n):
-        #    print(f'query:{n}')
-        #    sio.emit('BID', [200,3])
-        #    return ''
+        @dash_app.callback(Output('labelOB', 'children'),
+            [Input('refresh_ob', 'n_intervals')])
+        def update_interval(n):
+            print(f'ob query:{n}')
+            sio.emit('get_order_book', [])
+            return ''
+            
         port = 4000 + round(1000*random())
-        app.run_server(port=port, debug=True)
+        dash_app.run_server(port=port, debug=True, use_reloader=False)
 
 
 if __name__ == '__main__':
-    serv = Server()
+    print('launching server')
     start_server()
-    print('trying main')
-    serv.main()
+    cli = DashClient()
+    cli.main()
     #while True:
     #    sio.emit('my message', {'foo': 'bar'})
     #    time.wait(1)

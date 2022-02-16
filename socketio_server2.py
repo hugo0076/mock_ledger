@@ -1,32 +1,11 @@
-#import socketio
-#
-#sio = socketio.AsyncServer()
-#
-#@sio.on('*')
-#async def catch_all(event, sid, data):
-#    print(f'event {event} happened, sid {sid}, data {data}')
-#    pass
-#
-#@sio.event
-#def connect(sid, environ, auth):
-#    print('server connect ', sid)
-#
-#@sio.event
-#def disconnect(sid):
-#    print('server disconnect ', sid)
-#
-#
-##sio.emit('my event', {'data': 'foobar'})
-
-# set async_mode to 'threading', 'eventlet', 'gevent' or 'gevent_uwsgi' to
-# force a mode else, the best mode is selected automatically from what's
-# installed
 import eventlet
 import socketio
 import datetime as dt
 import json
 from uuid import uuid4
 import time
+import copy
+import jsonpickle
 sio = socketio.Server()
 app = socketio.WSGIApp(sio)
 
@@ -39,11 +18,12 @@ class Order:
         self.o_time = o_time
         self.id = uuid4().hex
 
-#trade = {'bid':sid, 'ask': best_ask.sid, 'qty': best_ask.qty, 'price': best_ask.price, 'time': order.time, 'resting_order': best_ask}
 class Trade:
-    def __init__(self, bid, ask, price, qty, resting_order, resting_order_type, o_time = time.time()):
+    def __init__(self, bid, bid_sid, ask, ask_sid, price, qty, resting_order, resting_order_type, o_time = time.time()):
         self.bid = bid
+        self.bid_sid = bid_sid
         self.ask = ask
+        self.ask_sid = ask_sid
         self.price = price
         self.qty = qty
         self.o_time = o_time
@@ -51,12 +31,41 @@ class Trade:
         self.resting_order_type = resting_order_type
         self.id = uuid4().hex
 
+class Trader:
+    def __init__(self, bids, asks, trades, sid, name):
+        self.bids = bids
+        self.asks = asks
+        self.trades = trades
+        self.id = uuid4().hex
+        self.sid = sid
+        self.name = name
+
+class OrderBook:
+    def __init__(self, bids, asks, orders, trades, traders):
+        self.bids = bids
+        self.asks = asks
+        self.orders = orders
+        self.trades = trades
+        self.traders = traders
+
+trader_lookup_dict = {}
+order_book = OrderBook(bids = [], asks = [], orders = [], trades = [], traders = [])
+
 @sio.event
 def connect(sid, environ):
+    trader = Trader(bids=[], asks=[], trades=[], sid=sid, name=None)
+    order_book.traders.append(trader)
+    trader_lookup_dict[sid] = len(order_book.traders) - 1
     print('connect ', sid)
+    print(f'Traders: {[trader.sid for trader in order_book.traders]}')
+
 
 @sio.on('*')
 def catch_all(event, sid, data):
+    if event == 'name':
+        order_book.traders[trader_lookup_dict[sid]].name = data
+    if event == 'get_order_book':
+        handle_order_book_request(event, sid, data)
     if event in ['BID', 'ASK']:
         handle_order(event, sid, data)
     pass
@@ -65,10 +74,9 @@ def catch_all(event, sid, data):
 def disconnect(sid):
     print('disconnect ', sid)
 
-bids = []
-asks = []
-order_book = []
-trades = []
+def handle_order_book_request(event, sid, data):
+    print('handling orderbook req')
+    sio.emit('order_book', jsonpickle.encode(order_book), room=sid)
 
 def handle_order(event, sid, data):
     order = Order(o_type=event, sid=sid, price=int(data[0]), qty=int(data[1]), o_time = time.time())
@@ -77,11 +85,11 @@ def handle_order(event, sid, data):
     # check if this order is in cross 
     resultant_trades = []
     if event == 'BID':
-        if asks:
+        if order_book.asks:
             print(f'init matching bid qty {order.qty}')
-            asks.sort(key = lambda x: (x.price, x.o_time))
-            best_ask = asks[0]
-            print(f'asks:{asks}')
+            order_book.asks.sort(key = lambda x: (x.price, x.o_time))
+            best_ask = order_book.asks[0]
+            print(f'asks:{order_book.asks}')
             print(best_ask.price)
             print(order.price)
             print(type(order.price))
@@ -91,24 +99,24 @@ def handle_order(event, sid, data):
                 if order.qty >= best_ask.qty:
                     # reduce agg order size
                     order.qty = order.qty - best_ask.qty 
-                    trade = Trade(bid = order.id, ask = best_ask.id, price = best_ask.price, qty = best_ask.qty, resting_order = best_ask.id, resting_order_type = 'ASK', o_time = order.o_time)
+                    trade = Trade(bid = order.id, bid_sid = order.sid, ask = best_ask.id, ask_sid = best_ask.sid, price = best_ask.price, qty = best_ask.qty, resting_order = best_ask.id, resting_order_type = 'ASK', o_time = order.o_time)
                     resultant_trades.append(trade)
-                    asks.pop(0)
-                    best_ask = asks[0]
+                    order_book.asks.pop(0)
+                    best_ask = order_book.asks[0]
                 elif order.qty < best_ask.qty:
                     # reduce resting order size
-                    asks[0].qty = asks[0].qty - order.qty
+                    order_book.asks[0].qty = order_book.asks[0].qty - order.qty
                     order.qty = 0
                     #trade = {'bid':sid, 'ask': best_ask.sid, 'qty': order.qty, 'price': best_ask.price, 'time': order.time, 'resting_order': best_ask}
-                    trade = Trade(bid = order.id, ask = best_ask.id, price = best_ask.price, qty = order.qty, resting_order = best_ask.id, resting_order_type = 'ASK', o_time = order.o_time)
+                    trade = Trade(bid = order.id, bid_sid = order.sid, ask = best_ask.id, ask_sid = best_ask.sid, price = best_ask.price, qty = order.qty, resting_order = best_ask.id, resting_order_type = 'ASK', o_time = order.o_time)
                     resultant_trades.append(trade)
                     break
     elif event == 'ASK':
-        if bids:
+        if order_book.bids:
             print(f'init matching ask qty {order.qty}')
-            bids.sort(key = lambda x: (-x.price, x.o_time))
-            print(f'bids:{bids}')
-            best_bid = bids[0]
+            order_book.bids.sort(key = lambda x: (-x.price, x.o_time))
+            print(f'bids:{order_book.bids}')
+            best_bid = order_book.bids[0]
             print(best_bid.price)
             print(order.price)
             print(type(order.price))
@@ -119,32 +127,34 @@ def handle_order(event, sid, data):
                     # reduce agg order size
                     order.qty = order.qty - best_bid.qty 
                     #trade = {'bid':best_bid.sid, 'ask': sid, 'qty': best_bid.qty, 'price': best_bid.price, 'time': order.time, 'resting_order': best_bid}
-                    trade = Trade(bid = best_bid.id, ask = order.id, price = best_bid.price, qty = best_bid.qty, resting_order = best_bid.id, resting_order_type = 'BID', o_time = order.o_time)
+                    trade = Trade(bid = best_bid.id, bid_sid = best_bid.sid, ask = order.id, ask_sid = order.sid, price = best_bid.price, qty = best_bid.qty, resting_order = best_bid.id, resting_order_type = 'BID', o_time = order.o_time)
                     resultant_trades.append(trade)
-                    bids.pop(0)
-                    best_bid = bids[0]
+                    order_book.bids.pop(0)
+                    best_bid = order_book.bids[0]
                 elif order.qty < best_bid.qty:
                     # reduce resting order size
-                    bids[0].qty = bids[0].qty - order.qty
+                    order_book.bids[0].qty = order_book.bids[0].qty - order.qty
                     order.qty = 0
                     #trade = {'bid':best_bid.sid, 'ask': sid, 'qty': order.qty, 'price': best_bid.price, 'time': order.time, 'resting_order': best_bid}
-                    trade = Trade(bid = best_bid.id, ask = order.id, price = best_bid.price, qty = order.qty, resting_order = best_bid.id, resting_order_type = 'BID', o_time = order.o_time)
+                    trade = Trade(bid = best_bid.id, bid_sid = best_bid.sid, ask = order.id, ask_sid = order.sid, price = best_bid.price, qty = order.qty, resting_order = best_bid.id, resting_order_type = 'BID', o_time = order.o_time)
                     resultant_trades.append(trade)
                     break
     # if not share it with clients and add to book
     if order.qty > 0:
-        print(f'informing everyone of order: {order}')
-        order_book.append(order)
-        sio.emit('insert', json.dumps(order.__dict__))
+        print(f'informing everyone of order: {jsonpickle.encode(order)}')
+        order_book.orders.append(order)
+        sio.emit('insert', jsonpickle.encode(order))
         if event == 'BID':
-            bids.append(order)
+            order_book.bids.append(order)
         elif event == 'ASK':
-            asks.append(order)
+            order_book.asks.append(order)
     for trade in resultant_trades:
-        print(f'informing everyone of trade: {trade}')
-        sio.emit('trade', json.dumps(trade.__dict__))
-        trades.append(trade)
-    print(trades)
+        print(f'informing everyone of trade: {jsonpickle.encode(trade)}')
+        sio.emit('trade', jsonpickle.encode(trade))
+        order_book.trades.append(trade)
+        order_book.traders[trader_lookup_dict[trade.bid_sid]].trades.append(trade)
+        order_book.traders[trader_lookup_dict[trade.ask_sid]].trades.append(trade)
+    print(order_book.trades)
     
     return 0
 
