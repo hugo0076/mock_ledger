@@ -44,7 +44,7 @@ class MockServer():
 
     def __init__(self) -> None:
         self.trader_lookup_dict = {}
-        self.order_book = OrderBook(bids = [], asks = [], orders = [], trades = [], traders = [])
+        self.order_book = OrderBook(bids = [], asks = [], orders = [], trades = [], traders = [], tick_size= 0.5)
         print('init')
     
     def settle(self, event, sid, data):
