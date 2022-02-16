@@ -34,12 +34,13 @@ class Trader:
         self.name = name
 
 class OrderBook:
-    def __init__(self, bids, asks, orders, trades, traders):
+    def __init__(self, bids, asks, orders, trades, traders, tick_size):
         self.bids = bids
         self.asks = asks
         self.orders = orders
         self.trades = trades
         self.traders = traders
+        self.tick_size = tick_size
 
 class Settlement:
     def __init__(self, trades, pnl):

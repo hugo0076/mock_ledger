@@ -11,6 +11,7 @@ from collections import OrderedDict
 import sys
 import plotly.graph_objects as go
 import numpy as np
+import math
 from random import random
 
 import asyncio
@@ -92,7 +93,7 @@ class DashClient():
         self.asks = order_book.asks
         self.orders = order_book.orders
         self.trades = order_book.trades
-        
+        self.tick_size = order_book.tick_size
         return 0
     
     def handle_trade(self, trade):
@@ -199,7 +200,7 @@ class DashClient():
         def display_color(mean = 0):
             price_list = [o.price for o in self.orders]
             if self.orders:
-                data_range = range(min(price_list), max(price_list) + 1, self.tick_size)
+                data_range = np.arange(min(price_list), max(price_list) + 1, self.tick_size)
             else:
                 data_range = range(0,2,1)
 
@@ -244,7 +245,7 @@ class DashClient():
         def display_table(mean = 0):
             price_list = [o.price for o in self.orders]
             if self.orders:
-                data_range = range(min(price_list), max(price_list) + 1, self.tick_size)
+                data_range = np.arange(min(price_list), max(price_list) + 1, self.tick_size)
             else:
                 data_range = range(0,2,1)
             bids_dd = defaultdict(lambda x: 0)
@@ -294,10 +295,13 @@ class DashClient():
         )
         def update_output_bid(n_clicks, value):
             if not value == None:
-                print(f'Sending buy request at ${value}')
-                sio.emit('BID', [value,1])
+                price = math.floor(float(value)/self.tick_size)*self.tick_size
+                print(f'Sending buy request at ${price}')
+                sio.emit('BID', [price,1])
+            else:
+                price = None
             return 'Input "{}"'.format(
-                value
+                price
             )
         @dash_app.callback(
             Output('container-button-basic-ask', 'children'),
@@ -306,10 +310,13 @@ class DashClient():
         )
         def update_output_ask(n_clicks, value):
             if not value == None:
-                print(f'Sending ask request at ${value}')
-                sio.emit('ASK', [value,1])
+                price = math.ceil(float(value)/self.tick_size)*self.tick_size
+                print(f'Sending ask request at ${price}')
+                sio.emit('ASK', [price,1])
+            else:
+                price = None
             return 'Input "{}"'.format(
-                value
+                price
             )
 
         @dash_app.callback(

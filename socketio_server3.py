@@ -13,7 +13,7 @@ app = socketio.WSGIApp(sio)
 from typedefs_ob import Order, Trade, Trader, OrderBook, Settlement
 
 trader_lookup_dict = {}
-order_book = OrderBook(bids = [], asks = [], orders = [], trades = [], traders = [])
+order_book = OrderBook(bids = [], asks = [], orders = [], trades = [], traders = [], tick_size=0.5)
 
 @sio.event
 def connect(sid, environ):
@@ -73,7 +73,7 @@ class MockServer():
         sio.emit('order_book', jsonpickle.encode(self.order_book), room=sid)
 
     def handle_order(self,event, sid, data):
-        order = Order(o_type=event, sid=sid, price=int(data[0]), qty=int(data[1]), o_time = time.time())
+        order = Order(o_type=event, sid=sid, price=data[0], qty=int(data[1]), o_time = time.time())
         print('handling order')
 
         # check if this order is in cross 
