@@ -40,3 +40,9 @@ class OrderBook:
         self.orders = orders
         self.trades = trades
         self.traders = traders
+
+class Settlement:
+    def __init__(self, trades, pnl):
+        self.trades = trades
+        self.trades_text = []
+        self.pnl = pnl
