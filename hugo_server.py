@@ -1,9 +1,8 @@
-import socket
 import os
+import socket
 from _thread import *
-import socket
-import os
 from threading import Thread
+
 import thread
 
 ServerSocket = socket.socket()

@@ -1,33 +1,34 @@
-#import pygame
-from network import Network
+# import pygame
 import os
+
+from network import Network
+
 os.environ["SDL_VIDEODRIVER"] = "dummy"
 
 
 width = 500
 height = 500
-#win = pygame.display.set_mode((width, height))
-#pygame.display.set_caption("Client")
+# win = pygame.display.set_mode((width, height))
+# pygame.display.set_caption("Client")
 
 clientNumber = 0
 
 
-class Player():
+class Player:
     def __init__(self, x, y, width, height, color):
         self.x = x
         self.y = y
         self.width = width
         self.height = height
         self.color = color
-        self.rect = (x,y,width,height)
+        self.rect = (x, y, width, height)
         self.vel = 3
 
     def draw(self):
-        print(f'color = {self.color}, rect = {self.rect}')
-        #pygame.draw.rect(win, self.color, self.rect)
+        print(f"color = {self.color}, rect = {self.rect}")
+        # pygame.draw.rect(win, self.color, self.rect)
 
     def move(self):
-        
 
         self.update()
 
@@ -53,8 +54,8 @@ def main():
     run = True
     n = Network()
     startPos = read_pos(n.getPos())
-    p = Player(startPos[0],startPos[1],100,100,(0,255,0))
-    p2 = Player(0,0,100,100,(255,0,0))
+    p = Player(startPos[0], startPos[1], 100, 100, (0, 255, 0))
+    p2 = Player(0, 0, 100, 100, (255, 0, 0))
 
     while run:
         p2Pos = read_pos(n.send(make_pos((p.x, p.y))))
@@ -64,5 +65,6 @@ def main():
 
         p.move()
         redrawWindow(p, p2)
+
 
 main()

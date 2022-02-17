@@ -5,7 +5,6 @@ import collections
 import logging
 import socket
 
-
 MAX_MESSAGE_LENGTH = 1024
 
 
@@ -30,15 +29,15 @@ class RemoteClient(asyncore.dispatcher):
             return
         message = self.outbox.popleft()
         if len(message) > MAX_MESSAGE_LENGTH:
-            raise ValueError('Message too long')
+            raise ValueError("Message too long")
         self.send(message)
 
 
 class Host(asyncore.dispatcher):
 
-    log = logging.getLogger('Host')
+    log = logging.getLogger("Host")
 
-    def __init__(self, address=('localhost', 0)):
+    def __init__(self, address=("localhost", 0)):
         asyncore.dispatcher.__init__(self)
         self.create_socket(socket.AF_INET, socket.SOCK_STREAM)
         self.bind(address)
@@ -46,54 +45,53 @@ class Host(asyncore.dispatcher):
         self.remote_clients = []
 
     def handle_accept(self):
-        socket, addr = self.accept() # For the remote client.
-        self.log.info('Accepted client at %s', addr)
+        socket, addr = self.accept()  # For the remote client.
+        self.log.info("Accepted client at %s", addr)
         self.remote_clients.append(RemoteClient(self, socket, addr))
 
     def handle_read(self):
-        self.log.info('Received message: %s', self.read())
+        self.log.info("Received message: %s", self.read())
 
     def broadcast(self, message):
-        self.log.info('Broadcasting message: %s', message)
+        self.log.info("Broadcasting message: %s", message)
         for remote_client in self.remote_clients:
             remote_client.say(message)
 
 
 class Client(asyncore.dispatcher):
-
     def __init__(self, host_address, name):
         asyncore.dispatcher.__init__(self)
-        self.log = logging.getLogger('Client (%7s)' % name)
+        self.log = logging.getLogger("Client (%7s)" % name)
         self.create_socket(socket.AF_INET, socket.SOCK_STREAM)
         self.name = name
-        self.log.info('Connecting to host at %s', host_address)
+        self.log.info("Connecting to host at %s", host_address)
         self.connect(host_address)
         self.outbox = collections.deque()
 
     def say(self, message):
         self.outbox.append(message)
-        self.log.info('Enqueued message: %s', message)
+        self.log.info("Enqueued message: %s", message)
 
     def handle_write(self):
         if not self.outbox:
             return
         message = self.outbox.popleft()
         if len(message) > MAX_MESSAGE_LENGTH:
-            raise ValueError('Message too long')
+            raise ValueError("Message too long")
         self.send(message)
 
     def handle_read(self):
         message = self.recv(MAX_MESSAGE_LENGTH)
-        self.log.info('Received message: %s', message)
+        self.log.info("Received message: %s", message)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    logging.info('Creating host')
+    logging.info("Creating host")
     host = Host()
-    logging.info('Creating clients')
-    alice = Client(host.getsockname(), 'Alice')
-    bob = Client(host.getsockname(), 'Bob')
-    alice.say('Hello, everybody!')
-    logging.info('Looping')
+    logging.info("Creating clients")
+    alice = Client(host.getsockname(), "Alice")
+    bob = Client(host.getsockname(), "Bob")
+    alice.say("Hello, everybody!")
+    logging.info("Looping")
     asyncore.loop()

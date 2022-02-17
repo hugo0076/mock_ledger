@@ -1,6 +1,6 @@
 import socket
-from _thread import *
 import sys
+from _thread import *
 
 server = "10.0.12.254"
 port = 5555
@@ -14,6 +14,7 @@ except socket.error as e:
 
 s.listen(2)
 print("Waiting for a connection, Server Started")
+
 
 def threaded_client(conn):
     conn.send(str.encode("Connected"))
@@ -36,6 +37,7 @@ def threaded_client(conn):
 
     print("Lost connection")
     conn.close()
+
 
 i = 0
 while True:

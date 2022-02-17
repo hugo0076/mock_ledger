@@ -1,9 +1,9 @@
-
-from uuid import uuid4
 import time
+from uuid import uuid4
+
 
 class Order:
-    def __init__(self, o_type, sid, price, qty, o_time = time.time()):
+    def __init__(self, o_type, sid, price, qty, o_time=time.time()):
         self.o_type = o_type
         self.sid = sid
         self.price = price
@@ -11,8 +11,20 @@ class Order:
         self.o_time = o_time
         self.id = uuid4().hex
 
+
 class Trade:
-    def __init__(self, bid, bid_sid, ask, ask_sid, price, qty, resting_order, resting_order_type, o_time = time.time()):
+    def __init__(
+        self,
+        bid,
+        bid_sid,
+        ask,
+        ask_sid,
+        price,
+        qty,
+        resting_order,
+        resting_order_type,
+        o_time=time.time(),
+    ):
         self.bid = bid
         self.bid_sid = bid_sid
         self.ask = ask
@@ -24,6 +36,7 @@ class Trade:
         self.resting_order_type = resting_order_type
         self.id = uuid4().hex
 
+
 class Trader:
     def __init__(self, bids, asks, trades, sid, name):
         self.bids = bids
@@ -33,6 +46,7 @@ class Trader:
         self.sid = sid
         self.name = name
 
+
 class OrderBook:
     def __init__(self, bids, asks, orders, trades, traders, tick_size):
         self.bids = bids
@@ -41,6 +55,7 @@ class OrderBook:
         self.trades = trades
         self.traders = traders
         self.tick_size = tick_size
+
 
 class Settlement:
     def __init__(self, trades, pnl):

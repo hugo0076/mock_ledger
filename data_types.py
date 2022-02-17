@@ -1,5 +1,6 @@
 import datetime as dt
 
+
 class Player:
     def __init__(self, name: str):
         self.name = name
@@ -8,7 +9,14 @@ class Player:
 
 
 class Order:
-    def __init__(self, side: bool, player: Player, size: int, price: float, timestamp=dt.date.today()):
+    def __init__(
+        self,
+        side: bool,
+        player: Player,
+        size: int,
+        price: float,
+        timestamp=dt.date.today(),
+    ):
         self.side = side
         self.player = player
         self.size = size
@@ -17,7 +25,9 @@ class Order:
 
 
 class Trade:
-    def __init__(self, resting_order: Order, aggressive_order: Order, size: int, price: float):
+    def __init__(
+        self, resting_order: Order, aggressive_order: Order, size: int, price: float
+    ):
         self.restingOrder = resting_order
         self.aggressiveOrder = aggressive_order
         self.size = size
