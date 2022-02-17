@@ -30,6 +30,11 @@ def catch_all(event, sid, data):
         serv.order_book.traders[serv.trader_lookup_dict[sid]].name = data
     if event == 'get_order_book':
         serv.handle_order_book_request(event, sid, data)
+    if event == 'cancel':
+        serv.handle_cancel(event, sid, data)
+    if event == 'get_sid':
+        print('sending sid')
+        sio.emit('sid', str(sid), room=sid)
     if event == 'settle':
         serv.settle(event, sid, data)
     if event in ['BID', 'ASK']:
@@ -71,6 +76,20 @@ class MockServer():
     def handle_order_book_request(self, event, sid, data):
         print('handling orderbook req')
         sio.emit('order_book', jsonpickle.encode(self.order_book), room=sid)
+    
+    def handle_cancel(self, event, sid, data):
+        print('handling cancel req')
+        for order in self.order_book.bids:
+            if order.price == float(data):
+                print('sending cancel')
+                sio.emit('cancel', jsonpickle.encode(order))
+        for order in self.order_book.asks:
+            if order.price == float(data):
+                print('sending cancel')
+                sio.emit('cancel', jsonpickle.encode(order))
+            
+        self.order_book.bids = [item for item in self.order_book.bids if not item.price == float(data)]
+        self.order_book.asks = [item for item in self.order_book.asks if not item.price == float(data)]
 
     def handle_order(self,event, sid, data):
         order = Order(o_type=event, sid=sid, price=data[0], qty=int(data[1]), o_time = time.time())

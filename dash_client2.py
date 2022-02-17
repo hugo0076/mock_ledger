@@ -37,10 +37,17 @@ def connect():
 
 @sio.on('*')
 def catch_all(event, raw_data):
+    if event == 'sid':
+        print(f'got sid: {raw_data}')   
+        cli.sid = raw_data
+        return 0
     data = jsonpickle.decode(raw_data)
     if event == 'insert':
         print(f'got insrt {data}')
         cli.handle_order(data)
+    elif event == 'cancel':
+        print(f'got cancel {data}')
+        cli.handle_cancel(data)
     elif event == 'trade':
         print(f'got trade: {data}')
         cli.handle_trade(data)
@@ -66,8 +73,13 @@ class DashClient():
         self.asks = []
         self.ask_px_q = []
         self.tick_size = 1
+        self.trades = []
+        self.mytrades = []
+        self.sid = ''
         # TODO: add code to get current state of book
         sio.emit('get_order_book', [])
+        sio.emit('get_sid', [])
+        
         print('init')
     
     def handle_order(self, order):
@@ -77,6 +89,18 @@ class DashClient():
             self.bids.append(order)
         elif order.o_type == 'ASK':
             self.asks.append(order)
+        return 0
+    
+    def handle_cancel(self, order):
+        # if not add to book 
+        print(order)
+        print(self.orders)
+        self.orders = [o for o in self.orders if not o.o_time == order.o_time]
+        if order.o_type == 'BID':
+            self.bids = [o for o in self.bids if not o.o_time == order.o_time]
+        elif order.o_type == 'ASK':
+            self.asks = [o for o in self.asks if not o.o_time == order.o_time]
+        print('removed order')
         return 0
     
     def print_settlement(self, settlement):
@@ -103,11 +127,18 @@ class DashClient():
             raise IndexError
         print(f'ob: {len(self.orders)} bid: {len(self.bids)} ask: {len(self.asks)}')
         self.trades.append(trade)
+        if self.sid in [trade.bid_sid, trade.ask_sid]:
+            self.mytrades.append(trade)
         self.orders = [order for order in self.orders if order.id != trade.resting_order]
         if trade.resting_order_type == 'BID':
             self.bids = [order for order in self.bids if order.id != trade.resting_order]
         elif trade.resting_order_type == 'ASK':
             self.asks = [order for order in self.asks if order.id != trade.resting_order]
+        return 0
+    
+    def cancel_trades(self, price):
+        # if not add to book 
+        sio.emit('cancel', str(price))
         return 0
 
     def main(self, type = 0):
@@ -155,7 +186,8 @@ class DashClient():
         dash_app.layout = html.Div(children=[
             html.Div([
                 dcc.Interval(id='refresh_ui', interval=2500, n_intervals=0),
-                html.H1(id='labelUI', children='')
+                html.H1(id='labelUI', children=''),
+                html.H1(id='labelUG', children='')
             ]),
             html.Div([
                 dcc.Interval(id='refresh_ob', interval=15000, n_intervals=0),
@@ -164,34 +196,75 @@ class DashClient():
 
             html.H1(children='Mock Ledger',style={'textAlign': 'center'}),
 
-            dcc.Graph(id="graph"),
+            html.Div(dcc.Graph(id="graph"),style={'width': '49%', 'display': 'inline-block', 'vertical-align':'top'}),
 
-            html.Div([
-                dash_table.DataTable(
-                    id="table",
+            html.Div(
+                html.Div(dash_table.DataTable(
+                    id="market_orders",
                     style_data={
                         'width': '10px',
-                        'maxWidth': '10px',
-                        'minWidth': '10px',
                     },
                     columns=[{"name": i, "id": i} 
                              for i in data.columns],
+                    style_cell_conditional=[
+                        {'if': {'column_id': "Bids Qty"},
+                         'width': '130px'},
+                        {'if': {'column_id': "Price"},
+                         'width': '50px'},
+                         {'if': {'column_id': "Asks Qty"},
+                         'width': '130px'},
+                    ],
                     data=data.to_dict('records'),
                     style_cell=dict(textAlign='left'),
                     style_header=dict(backgroundColor="paleturquoise")
-                )
-            ], style={'width' : '50%', 'align' : 'center', 'flex': 1}),
+                ), style={'margin': 'auto'}
+                ),
+                style={'width': '20%', 'display': 'inline-block', 'vertical-align':'top', 'margin': 'auto'}
+            ),
+
+            html.Div(
+                html.Div(dash_table.DataTable(
+                    id="my_orders",
+                    style_data={
+                        'width': '10px',
+                    },
+                    columns=[{"name": i, "id": i} 
+                             for i in data.columns],
+                    style_cell_conditional=[
+                        {'if': {'column_id': "Bids Qty"},
+                         'width': '130px'},
+                        {'if': {'column_id': "Price"},
+                         'width': '50px'},
+                         {'if': {'column_id': "Asks Qty"},
+                         'width': '130px'},
+                    ],
+                    data=data.to_dict('records'),
+                    style_cell=dict(textAlign='left'),
+                    style_header=dict(backgroundColor="paleturquoise")
+                ), style={'margin': 'auto'}
+                ),
+                style={'width': '20%', 'display': 'inline-block', 'vertical-align':'top', 'margin': 'auto'}
+            ),
 
             html.Div(
                 bid_quote_input + ask_quote_input + settle_input
             ),
-            dash_table.DataTable(
-                id="market_orders",
+            html.Div(
+                dash_table.DataTable(
+                id="market_trades",
                 data=o_data.to_dict('records'),
                 columns=[{'id': c, 'name': c} for c in o_data.columns],
                 page_action='none',
                 style_table={'height': '300px', 'overflowY': 'auto'}
-            )
+            ),style={'width': '49%', 'display': 'inline-block', 'vertical-align':'top'}),
+            html.Div(
+                dash_table.DataTable(
+                id="my_trades",
+                data=o_data.to_dict('records'),
+                columns=[{'id': c, 'name': c} for c in o_data.columns],
+                page_action='none',
+                style_table={'height': '300px', 'overflowY': 'auto'}
+            ),style={'width': '49%', 'display': 'inline-block', 'vertical-align':'top'})
         ])
 
         @dash_app.callback(
@@ -240,29 +313,35 @@ class DashClient():
             return fig
         
         @dash_app.callback(
-            Output("table", "data"),
+            Output("market_orders", "data"),
             Input('refresh_ui', 'n_intervals'))
         def display_table(mean = 0):
             price_list = [o.price for o in self.orders]
             if self.orders:
-                data_range = np.arange(min(price_list), max(price_list) + 1, self.tick_size)
+                data_range = np.arange(min(price_list), max(price_list) + self.tick_size, self.tick_size)
             else:
-                data_range = range(0,2,1)
-            bids_dd = defaultdict(lambda x: 0)
-            for row in data_range:
-                bids_dd[row] = 0.00001
+                data_range = range(0,0,1)
+            self.bids.sort(key = lambda x: (x.price), reverse = True)
+            self.asks.sort(key = lambda x: (x.price))
+            
+            bids_dd = defaultdict(lambda: 0)
+            #for row in data_range:
+            #    bids_dd[row] = 0
             for order in self.bids:
                 bids_dd[order.price] += order.qty
-            asks_dd = defaultdict(lambda x: 0)
-            for row in data_range:
-                asks_dd[row] = 0
+            asks_dd = defaultdict(lambda: 0)
+            #for row in data_range:
+            #    asks_dd[row] = 0
             for order in self.asks:
                 asks_dd[order.price] += order.qty
+            full_levels = list(asks_dd.keys())[::-1] + list(bids_dd.keys())
+            bid_list = [bids_dd[k] if k in bids_dd else 0 for k in full_levels]
+            ask_list = [asks_dd[k] if k in asks_dd else 0 for k in full_levels]
             data_dict = OrderedDict(
                 [
-                    ("Bids Qty", list(bids_dd.values())[::-1]), 
-                    ("Price", list(data_range)[::-1]),
-                    ("Asks Qty", list(asks_dd.values())[::-1])
+                    ("Bids Qty", bid_list), 
+                    ("Price", full_levels),
+                    ("Asks Qty", ask_list)
                 ]
             )
             data = pd.DataFrame(data_dict)
@@ -271,7 +350,56 @@ class DashClient():
             return data
         
         @dash_app.callback(
-            Output("market_orders", "data"),
+            Output("my_orders", "data"),
+            Input('refresh_ui', 'n_intervals'))
+        def display_table(mean = 0):
+            price_list = [o.price for o in self.orders]
+            if self.orders:
+                data_range = np.arange(min(price_list), max(price_list) + self.tick_size, self.tick_size)
+            else:
+                data_range = range(0,0,1)
+            self.bids.sort(key = lambda x: (x.price), reverse = True)
+            self.asks.sort(key = lambda x: (x.price))
+            
+            bids_dd = defaultdict(lambda: 0)
+            self_bids_dd = defaultdict(lambda: 0)
+            #for row in data_range:
+            #    bids_dd[row] = 0
+            for order in self.bids:
+                bids_dd[order.price] += order.qty
+                if order.sid == self.sid:
+                    self_bids_dd[order.price] += order.qty
+            asks_dd = defaultdict(lambda: 0)
+            self_asks_dd = defaultdict(lambda: 0)
+            #for row in data_range:
+            #    asks_dd[row] = 0
+            for order in self.asks:
+                asks_dd[order.price] += order.qty
+                if order.sid == self.sid:
+                    self_asks_dd[order.price] += order.qty
+            print(self_asks_dd)
+            print(self_bids_dd)
+            
+            full_levels = list(asks_dd.keys())[::-1] + list(bids_dd.keys())
+            bid_list = [self_bids_dd[k] if k in self_bids_dd else 0 for k in full_levels]
+            ask_list = [self_asks_dd[k] if k in self_asks_dd else 0 for k in full_levels]
+            self.bidorderlist = bid_list
+            self.askorderlist = ask_list
+            self.full_levels = full_levels
+            data_dict = OrderedDict(
+                [
+                    ("Bids Qty", bid_list), 
+                    ("Price", full_levels),
+                    ("Asks Qty", ask_list)
+                ]
+            )
+            data = pd.DataFrame(data_dict)
+            data=data.to_dict('records')
+            #columns=[{"name": i, "id": i} for i in data.columns]
+            return data
+        
+        @dash_app.callback(
+            Output("market_trades", "data"),
             Input('refresh_ui', 'n_intervals'))
         def display_table(mean = 0):
 
@@ -281,6 +409,23 @@ class DashClient():
                     ("Price", [t.price for t in self.trades]),
                     ("Qty", [t.qty for t in self.trades]),
                     ("Time", [datetime.datetime.fromtimestamp(t.o_time).strftime('%H:%M:%S.%f') for t in self.trades])
+                ]
+            )
+            data = pd.DataFrame(data_dict)
+            data=data.to_dict('records')
+            #columns=[{"name": i, "id": i} for i in data.columns]
+            return data
+        
+        @dash_app.callback(
+            Output("my_trades", "data"),
+            Input('refresh_ui', 'n_intervals'))
+        def display_table(mean = 0):
+            self.mytrades.sort(key = lambda x: (x.o_time), reverse = True)
+            data_dict = OrderedDict(
+                [
+                    ("Price", [t.price for t in self.mytrades]),
+                    ("Qty", [t.qty for t in self.mytrades]),
+                    ("Time", [datetime.datetime.fromtimestamp(t.o_time).strftime('%H:%M:%S.%f') for t in self.mytrades])
                 ]
             )
             data = pd.DataFrame(data_dict)
@@ -340,6 +485,22 @@ class DashClient():
             [Input('refresh_ob', 'n_intervals')])
         def update_interval(n):
             sio.emit('get_order_book', [])
+            return ''
+
+        @dash_app.callback(Output('labelUG', 'children'), Input('my_orders', 'active_cell'))
+        def update_graphs(active_cell):
+            if active_cell:
+                price = self.full_levels[active_cell['row']]
+                if active_cell['column'] == 0:
+                    print('remove buy')
+                    if not self.bidorderlist[active_cell['row']] == 0:
+                        self.cancel_trades(price)
+                elif active_cell['column'] == 2:
+                    print('remove ask')
+                    if not self.bidorderlist[active_cell['row']] == 0:
+                        self.cancel_trades(price)
+                else:
+                    print('null col clicked')
             return ''
 
         port = 4000 + round(1000*random())
