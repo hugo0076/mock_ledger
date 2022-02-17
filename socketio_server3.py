@@ -61,7 +61,10 @@ class MockServer():
             for trade in trader.trades:
                 print(f'reconciling trade: {trade}')
                 contract_val_bid = (settlement_price - trade.price)*trade.qty
-                if trade.bid_sid == cur_sid:
+                if trade.bid_sid == trade.ask_sid:
+                    descr = f'Wash Traded {trade.qty} @ {trade.price} compliance will see you tomorrow, counterparty id = [you lol]'
+                    settlement.trades_text.append(descr)
+                elif trade.bid_sid == cur_sid:
                     settlement.pnl += contract_val_bid
                     descr = f'Bought {trade.qty} @ {trade.price} for a pnl of {contract_val_bid}, counterparty id = [{trade.ask_sid}]'
                     settlement.trades_text.append(descr)
